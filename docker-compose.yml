@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  cot-faithfulness-eval:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cot-faithfulness
+    environment:
+      - PYTHONPATH=/app
+      - COT_CONFIG_PATH=/app/config/config.yaml
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - cot-network
+    
+  redis:
+    image: redis:7-alpine
+    container_name: cot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - cot-network
+    command: redis-server --appendonly yes
+    
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cot-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    restart: unless-stopped
+    networks:
+      - cot-network
+      
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cot-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+    networks:
+      - cot-network
+    depends_on:
+      - prometheus
+
+volumes:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  cot-network:
+    driver: bridge
